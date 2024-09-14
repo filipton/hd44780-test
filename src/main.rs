@@ -16,11 +16,12 @@ use hd44780_driver::{Cursor, CursorBlink, Display, DisplayMode, HD44780};
 const BACKLIGHT_SHIFT: u8 = 0b1000_0000;
 const RS_SHIFT: u8 = 0b0100_0000;
 const E_SHIFT: u8 = 0b0010_0000;
-const D4_SHIFT: u8 = 0b0000_1000;
-const D5_SHIFT: u8 = 0b0000_0100;
-const D6_SHIFT: u8 = 0b0000_0010;
-const D7_SHIFT: u8 = 0b0000_0001;
-const LCD_ADDR: u8 = 0x27;
+/*
+const D4_SHIFT: u8 = 0b0000_0001;
+const D5_SHIFT: u8 = 0b0000_0010;
+const D6_SHIFT: u8 = 0b0000_0100;
+const D7_SHIFT: u8 = 0b0000_1000;
+*/
 
 #[entry]
 fn main() -> ! {
@@ -50,34 +51,119 @@ fn main() -> ! {
     shift_out(&mut clk_pin, &mut data_pin, 255);
     latch_pin.set_high();
 
+    lcd_byte(
+        0x33,
+        false,
+        &mut clk_pin,
+        &mut data_pin,
+        &mut latch_pin,
+        &delay,
+    );
+    lcd_byte(
+        0x32,
+        false,
+        &mut clk_pin,
+        &mut data_pin,
+        &mut latch_pin,
+        &delay,
+    );
+    lcd_byte(
+        0x28,
+        false,
+        &mut clk_pin,
+        &mut data_pin,
+        &mut latch_pin,
+        &delay,
+    );
+    lcd_byte(
+        0x0C,
+        false,
+        &mut clk_pin,
+        &mut data_pin,
+        &mut latch_pin,
+        &delay,
+    );
+    lcd_byte(
+        0x06,
+        false,
+        &mut clk_pin,
+        &mut data_pin,
+        &mut latch_pin,
+        &delay,
+    );
+    lcd_byte(
+        0x01,
+        false,
+        &mut clk_pin,
+        &mut data_pin,
+        &mut latch_pin,
+        &delay,
+    );
+
     delay.delay_millis(1000);
 
-    latch_pin.set_low();
-    shift_out(&mut clk_pin, &mut data_pin, BACKLIGHT_SHIFT);
-    shift_out(&mut clk_pin, &mut data_pin, 255);
-    latch_pin.set_high();
+    lcd_byte(
+        0x01,
+        false,
+        &mut clk_pin,
+        &mut data_pin,
+        &mut latch_pin,
+        &delay,
+    );
 
-    delay.delay_millis(1000);
+    lcd_byte(
+        0x80,
+        false,
+        &mut clk_pin,
+        &mut data_pin,
+        &mut latch_pin,
+        &delay,
+    );
+    let string = "Lorem Ipsum";
+    for c in string.bytes() {
+        lcd_byte(c, true, &mut clk_pin, &mut data_pin, &mut latch_pin, &delay);
+    }
+    /*
+    // MOVE CURSOR RIGHT
+    lcd_byte(
+        0x14,
+        false,
+        &mut clk_pin,
+        &mut data_pin,
+        &mut latch_pin,
+        &delay,
+    );
+    */
 
-    latch_pin.set_low();
-    shift_out(&mut clk_pin, &mut data_pin, 0);
-    shift_out(&mut clk_pin, &mut data_pin, 255);
-    latch_pin.set_high();
+    // MOVE CURSOR TO (x, y)
+    let move_byte = (get_lcd_position((13, 0), (16, 2)) & 0b0111_1111) | 0b1000_0000;
+    log::info!("move_byte: 0x{move_byte:02X}");
+    lcd_byte(
+        move_byte,
+        false,
+        &mut clk_pin,
+        &mut data_pin,
+        &mut latch_pin,
+        &delay,
+    );
 
-    lcd_byte(0x33, false, &mut clk_pin, &mut data_pin, &mut latch_pin, &delay);
-    lcd_byte(0x32, false, &mut clk_pin, &mut data_pin, &mut latch_pin, &delay);
-    lcd_byte(0x28, false, &mut clk_pin, &mut data_pin, &mut latch_pin, &delay);
-    lcd_byte(0x0C, false, &mut clk_pin, &mut data_pin, &mut latch_pin, &delay);
-    lcd_byte(0x06, false, &mut clk_pin, &mut data_pin, &mut latch_pin, &delay);
-    lcd_byte(0x01, false, &mut clk_pin, &mut data_pin, &mut latch_pin, &delay);
+    let string = "WOW";
+    for c in string.bytes() {
+        lcd_byte(c, true, &mut clk_pin, &mut data_pin, &mut latch_pin, &delay);
+    }
 
-    delay.delay_millis(1000);
-
-    lcd_byte(0x01, false, &mut clk_pin, &mut data_pin, &mut latch_pin, &delay);
-    lcd_byte(0x80, false, &mut clk_pin, &mut data_pin, &mut latch_pin, &delay);
-    lcd_byte(b'X', true, &mut clk_pin, &mut data_pin, &mut latch_pin, &delay);
-    lcd_byte(0xC0, false, &mut clk_pin, &mut data_pin, &mut latch_pin, &delay);
-    lcd_byte(b'D', true, &mut clk_pin, &mut data_pin, &mut latch_pin, &delay);
+    lcd_byte(
+        0xC0,
+        false,
+        &mut clk_pin,
+        &mut data_pin,
+        &mut latch_pin,
+        &delay,
+    );
+    let string = "Test 1234567890";
+    for c in string.bytes() {
+        lcd_byte(c, true, &mut clk_pin, &mut data_pin, &mut latch_pin, &delay);
+    }
 
     loop {
         log::info!("Hello world!");
@@ -111,25 +197,12 @@ fn lcd_byte(
 ) {
     // high nibble
     let mut tmp = match mode {
-        true => RS_SHIFT,
-        false => 0,
+        true => RS_SHIFT | ((byte >> 4) & 0b00001111),
+        false => (byte >> 4) & 0b00001111,
     };
 
-    // TODO: make this better XD
-    if byte & 0x10 != 0 {
-        tmp += D4_SHIFT;
-    }
-    if byte & 0x20 != 0 {
-        tmp += D5_SHIFT;
-    }
-    if byte & 0x40 != 0 {
-        tmp += D6_SHIFT;
-    }
-    if byte & 0x80 != 0 {
-        tmp += D7_SHIFT;
-    }
-    tmp += E_SHIFT;
-    tmp += BACKLIGHT_SHIFT;
+    tmp |= E_SHIFT;
+    tmp |= BACKLIGHT_SHIFT;
 
     delay.delay_micros(E_DELAY);
     latch_pin.set_low();
@@ -145,25 +218,12 @@ fn lcd_byte(
 
     // low nibble
     let mut tmp = match mode {
-        true => RS_SHIFT,
-        false => 0,
+        true => RS_SHIFT | (byte & 0b00001111),
+        false => byte & 0b00001111,
     };
 
-    // TODO: make this better XD
-    if byte & 0x01 != 0 {
-        tmp += D4_SHIFT;
-    }
-    if byte & 0x02 != 0 {
-        tmp += D5_SHIFT;
-    }
-    if byte & 0x04 != 0 {
-        tmp += D6_SHIFT;
-    }
-    if byte & 0x08 != 0 {
-        tmp += D7_SHIFT;
-    }
-    tmp += E_SHIFT;
-    tmp += BACKLIGHT_SHIFT;
+    tmp |= E_SHIFT;
+    tmp |= BACKLIGHT_SHIFT;
 
     delay.delay_micros(E_DELAY);
     latch_pin.set_low();
@@ -178,4 +238,24 @@ fn lcd_byte(
     delay.delay_micros(E_DELAY);
 
     latch_pin.set_low();
+}
+
+// https://github.com/JohnDoneth/hd44780-driver/blob/3381df150b3eb7d65c81195c4730e3a007af2e2a/src/lib.rs#L114C1-L130C2
+pub fn get_lcd_position(position: (u8, u8), size: (u8, u8)) -> u8 {
+    if (position.0 >= size.0) || (position.1 >= size.1) {
+        panic!(
+            "Coordinates out of bounds: ({};{}) not fitting in a {}x{} display",
+            position.0, position.1, size.0, size.1
+        );
+    }
+
+    let mut addr = position.0 & 0x3f;
+    if (position.1 & 1) == 1 {
+        addr += 0x40;
+    }
+    if (position.1 & 2) == 2 {
+        addr += size.0;
+    }
+
+    addr
 }
