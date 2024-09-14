@@ -36,10 +36,10 @@ fn main() -> ! {
 
     esp_println::logger::init_logger_from_env();
 
-    latch_pin.set_low();
     shift_out(&mut clk_pin, &mut data_pin, 0);
     shift_out(&mut clk_pin, &mut data_pin, 255);
     latch_pin.set_high();
+    latch_pin.set_low();
 
     lcd_byte(0x33, false, &mut clk_pin, &mut data_pin, &mut latch_pin, &delay,);
     lcd_byte(0x32, false, &mut clk_pin, &mut data_pin, &mut latch_pin, &delay,);
@@ -138,15 +138,15 @@ fn lcd_byte(
     tmp |= BACKLIGHT_SHIFT;
 
     delay.delay_micros(E_DELAY);
-    latch_pin.set_low();
     shift_out(clk_pin, data_pin, tmp);
     shift_out(clk_pin, data_pin, 255); // FIRST SHIFTER (FOR BUTTONS)
     latch_pin.set_high();
-    delay.delay_micros(E_PULSE);
     latch_pin.set_low();
+    delay.delay_micros(E_PULSE);
     shift_out(clk_pin, data_pin, BACKLIGHT_SHIFT);
     shift_out(clk_pin, data_pin, 255); // FIRST SHIFTER (FOR BUTTONS)
     latch_pin.set_high();
+    latch_pin.set_low();
     delay.delay_micros(E_DELAY);
 
     // low nibble
@@ -159,18 +159,16 @@ fn lcd_byte(
     tmp |= BACKLIGHT_SHIFT;
 
     delay.delay_micros(E_DELAY);
-    latch_pin.set_low();
     shift_out(clk_pin, data_pin, tmp);
     shift_out(clk_pin, data_pin, 255); // FIRST SHIFTER (FOR BUTTONS)
     latch_pin.set_high();
-    delay.delay_micros(E_PULSE);
     latch_pin.set_low();
+    delay.delay_micros(E_PULSE);
     shift_out(clk_pin, data_pin, BACKLIGHT_SHIFT);
     shift_out(clk_pin, data_pin, 255); // FIRST SHIFTER (FOR BUTTONS)
     latch_pin.set_high();
-    delay.delay_micros(E_DELAY);
-
     latch_pin.set_low();
+    delay.delay_micros(E_DELAY);
 }
 
 // https://github.com/JohnDoneth/hd44780-driver/blob/3381df150b3eb7d65c81195c4730e3a007af2e2a/src/lib.rs#L114C1-L130C2
