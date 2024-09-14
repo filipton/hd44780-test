@@ -165,9 +165,58 @@ fn main() -> ! {
         lcd_byte(c, true, &mut clk_pin, &mut data_pin, &mut latch_pin, &delay);
     }
 
+    delay.delay_millis(5000);
+    // clear second line (to the end without first 5 chars)
+    let move_byte = (get_lcd_position((5, 1), (16, 2)) & 0b0111_1111) | 0b1000_0000;
+    lcd_byte(
+        move_byte,
+        false,
+        &mut clk_pin,
+        &mut data_pin,
+        &mut latch_pin,
+        &delay,
+    );
+
+    for _ in 0..11 {
+        lcd_byte(
+            b' ',
+            true,
+            &mut clk_pin,
+            &mut data_pin,
+            &mut latch_pin,
+            &delay,
+        );
+    }
+
+    let start = esp_hal::time::current_time().duration_since_epoch();
     loop {
-        log::info!("Hello world!");
-        delay.delay(500.millis());
+        delay.delay(66.millis());
+
+        let elapsed = esp_hal::time::current_time().duration_since_epoch() - start;
+        let move_byte = (get_lcd_position((5, 1), (16, 2)) & 0b0111_1111) | 0b1000_0000;
+        lcd_byte(
+            move_byte,
+            false,
+            &mut clk_pin,
+            &mut data_pin,
+            &mut latch_pin,
+            &delay,
+        );
+
+        for digit in num_to_digits(elapsed.to_millis() as u128) {
+            if digit == 0xFF {
+                break;
+            }
+
+            lcd_byte(
+                digit + 0x30,
+                true,
+                &mut clk_pin,
+                &mut data_pin,
+                &mut latch_pin,
+                &delay,
+            );
+        }
     }
 }
 
@@ -258,4 +307,24 @@ pub fn get_lcd_position(position: (u8, u8), size: (u8, u8)) -> u8 {
     }
 
     addr
+}
+
+fn num_to_digits(mut num: u128) -> [u8; 40] {
+    let mut tmp = [0xFF; 40];
+    let mut pos = 0;
+    while num > 0 {
+        let digit = (num % 10) as u8;
+        tmp[pos] = digit;
+
+        pos += 1;
+        num /= 10;
+    }
+
+    // reverse
+    let mut out = [0xFF; 40];
+    for i in 0..pos {
+        out[pos - i - 1] = tmp[i];
+    }
+
+    out
 }
