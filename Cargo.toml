@@ -6,7 +6,7 @@ edition = "2021"
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-esp-backtrace = { version = "0.14.0", features = [
+esp-backtrace = { version = "0.14.1", features = [
     "esp32c3",
     "exception-handler",
     "panic-handler",
@@ -14,8 +14,7 @@ esp-backtrace = { version = "0.14.0", features = [
 ] }
 esp-hal = { version = "0.20.1", features = [ "esp32c3", "embedded-hal-02", "embedded-hal" ] }
 esp-println = { version = "0.11.0", features = ["esp32c3", "log"] }
-hd44780-driver = "0.4.0"
-log = { version = "0.4.21" }
+log = { version = "0.4.22" }
 [profile.dev]
 # Rust debug is too slow.
 # For debug builds always builds with some optimization

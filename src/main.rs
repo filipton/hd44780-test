@@ -6,12 +6,10 @@ use esp_hal::{
     clock::ClockControl,
     delay::Delay,
     gpio::{AnyOutput, Io},
-    i2c::I2C,
     peripherals::Peripherals,
     prelude::*,
     system::SystemControl,
 };
-use hd44780_driver::{Cursor, CursorBlink, Display, DisplayMode, HD44780};
 
 const BACKLIGHT_SHIFT: u8 = 0b1000_0000;
 const RS_SHIFT: u8 = 0b0100_0000;
@@ -34,17 +32,9 @@ fn main() -> ! {
     let mut latch_pin = AnyOutput::new(io.pins.gpio1, esp_hal::gpio::Level::Low);
 
     let clocks = ClockControl::max(system.clock_control).freeze();
-    let mut delay = Delay::new(&clocks);
+    let delay = Delay::new(&clocks);
 
     esp_println::logger::init_logger_from_env();
-
-    let i2c = I2C::new(
-        peripherals.I2C0,
-        io.pins.gpio8,
-        io.pins.gpio9,
-        400.kHz(),
-        &clocks,
-    );
 
     latch_pin.set_low();
     shift_out(&mut clk_pin, &mut data_pin, 0);
@@ -215,10 +205,10 @@ fn num_to_digits(mut num: u128) -> [u8; 40] {
     }
 
     // reverse
-    let mut out = [0xFF; 40];
-    for i in 0..pos {
-        out[pos - i - 1] = tmp[i];
+    for i in 0..(pos / 2) {
+        let end_i = pos - i - 1;
+        tmp.swap(i, end_i);
     }
 
-    out
+    tmp
 }
