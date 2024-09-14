@@ -51,115 +51,37 @@ fn main() -> ! {
     shift_out(&mut clk_pin, &mut data_pin, 255);
     latch_pin.set_high();
 
-    lcd_byte(
-        0x33,
-        false,
-        &mut clk_pin,
-        &mut data_pin,
-        &mut latch_pin,
-        &delay,
-    );
-    lcd_byte(
-        0x32,
-        false,
-        &mut clk_pin,
-        &mut data_pin,
-        &mut latch_pin,
-        &delay,
-    );
-    lcd_byte(
-        0x28,
-        false,
-        &mut clk_pin,
-        &mut data_pin,
-        &mut latch_pin,
-        &delay,
-    );
-    lcd_byte(
-        0x0C,
-        false,
-        &mut clk_pin,
-        &mut data_pin,
-        &mut latch_pin,
-        &delay,
-    );
-    lcd_byte(
-        0x06,
-        false,
-        &mut clk_pin,
-        &mut data_pin,
-        &mut latch_pin,
-        &delay,
-    );
-    lcd_byte(
-        0x01,
-        false,
-        &mut clk_pin,
-        &mut data_pin,
-        &mut latch_pin,
-        &delay,
-    );
-
+    lcd_byte(0x33, false, &mut clk_pin, &mut data_pin, &mut latch_pin, &delay,);
+    lcd_byte(0x32, false, &mut clk_pin, &mut data_pin, &mut latch_pin, &delay,);
+    lcd_byte(0x28, false, &mut clk_pin, &mut data_pin, &mut latch_pin, &delay,);
+    lcd_byte(0x0C, false, &mut clk_pin, &mut data_pin, &mut latch_pin, &delay,);
+    lcd_byte(0x06, false, &mut clk_pin, &mut data_pin, &mut latch_pin, &delay,);
+    lcd_byte(0x01, false, &mut clk_pin, &mut data_pin, &mut latch_pin, &delay,);
     delay.delay_millis(1000);
 
-    lcd_byte(
-        0x01,
-        false,
-        &mut clk_pin,
-        &mut data_pin,
-        &mut latch_pin,
-        &delay,
-    );
+    lcd_byte(0x01, false, &mut clk_pin, &mut data_pin, &mut latch_pin, &delay,);
+    lcd_byte(0x80, false, &mut clk_pin, &mut data_pin, &mut latch_pin, &delay,);
 
-    lcd_byte(
-        0x80,
-        false,
-        &mut clk_pin,
-        &mut data_pin,
-        &mut latch_pin,
-        &delay,
-    );
     let string = "Lorem Ipsum";
     for c in string.bytes() {
         lcd_byte(c, true, &mut clk_pin, &mut data_pin, &mut latch_pin, &delay);
     }
     /*
     // MOVE CURSOR RIGHT
-    lcd_byte(
-        0x14,
-        false,
-        &mut clk_pin,
-        &mut data_pin,
-        &mut latch_pin,
-        &delay,
-    );
+    lcd_byte(0x14, false, &mut clk_pin, &mut data_pin, &mut latch_pin, &delay,);
     */
 
     // MOVE CURSOR TO (x, y)
     let move_byte = (get_lcd_position((13, 0), (16, 2)) & 0b0111_1111) | 0b1000_0000;
     log::info!("move_byte: 0x{move_byte:02X}");
-    lcd_byte(
-        move_byte,
-        false,
-        &mut clk_pin,
-        &mut data_pin,
-        &mut latch_pin,
-        &delay,
-    );
+    lcd_byte(move_byte, false, &mut clk_pin, &mut data_pin, &mut latch_pin, &delay);
 
     let string = "WOW";
     for c in string.bytes() {
         lcd_byte(c, true, &mut clk_pin, &mut data_pin, &mut latch_pin, &delay);
     }
 
-    lcd_byte(
-        0xC0,
-        false,
-        &mut clk_pin,
-        &mut data_pin,
-        &mut latch_pin,
-        &delay,
-    );
+    lcd_byte(0xC0, false, &mut clk_pin, &mut data_pin, &mut latch_pin, &delay);
     let string = "Test 1234567890";
     for c in string.bytes() {
         lcd_byte(c, true, &mut clk_pin, &mut data_pin, &mut latch_pin, &delay);
@@ -168,24 +90,10 @@ fn main() -> ! {
     delay.delay_millis(5000);
     // clear second line (to the end without first 5 chars)
     let move_byte = (get_lcd_position((5, 1), (16, 2)) & 0b0111_1111) | 0b1000_0000;
-    lcd_byte(
-        move_byte,
-        false,
-        &mut clk_pin,
-        &mut data_pin,
-        &mut latch_pin,
-        &delay,
-    );
+    lcd_byte(move_byte, false, &mut clk_pin, &mut data_pin, &mut latch_pin, &delay);
 
     for _ in 0..11 {
-        lcd_byte(
-            b' ',
-            true,
-            &mut clk_pin,
-            &mut data_pin,
-            &mut latch_pin,
-            &delay,
-        );
+        lcd_byte(b' ', true, &mut clk_pin, &mut data_pin, &mut latch_pin, &delay);
     }
 
     let start = esp_hal::time::current_time().duration_since_epoch();
@@ -194,28 +102,14 @@ fn main() -> ! {
 
         let elapsed = esp_hal::time::current_time().duration_since_epoch() - start;
         let move_byte = (get_lcd_position((5, 1), (16, 2)) & 0b0111_1111) | 0b1000_0000;
-        lcd_byte(
-            move_byte,
-            false,
-            &mut clk_pin,
-            &mut data_pin,
-            &mut latch_pin,
-            &delay,
-        );
+        lcd_byte(move_byte, false, &mut clk_pin, &mut data_pin, &mut latch_pin, &delay);
 
         for digit in num_to_digits(elapsed.to_millis() as u128) {
             if digit == 0xFF {
                 break;
             }
 
-            lcd_byte(
-                digit + 0x30,
-                true,
-                &mut clk_pin,
-                &mut data_pin,
-                &mut latch_pin,
-                &delay,
-            );
+            lcd_byte(digit + 0x30, true, &mut clk_pin, &mut data_pin, &mut latch_pin, &delay);
         }
     }
 }
