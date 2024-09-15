@@ -1,6 +1,7 @@
 #![no_std]
 #![no_main]
 
+use embedded_hal::digital::OutputPin;
 use esp_backtrace as _;
 use esp_hal::{
     clock::ClockControl,
@@ -10,16 +11,7 @@ use esp_hal::{
     prelude::*,
     system::SystemControl,
 };
-
-const BACKLIGHT_SHIFT: u8 = 0b1000_0000;
-const RS_SHIFT: u8 = 0b0100_0000;
-const E_SHIFT: u8 = 0b0010_0000;
-/*
-const D4_SHIFT: u8 = 0b0000_0001;
-const D5_SHIFT: u8 = 0b0000_0010;
-const D6_SHIFT: u8 = 0b0000_0100;
-const D7_SHIFT: u8 = 0b0000_1000;
-*/
+use hd44780_driver::{display_size::DisplaySize, DisplayMode, HD44780};
 
 #[entry]
 fn main() -> ! {
@@ -27,168 +19,80 @@ fn main() -> ! {
     let system = SystemControl::new(peripherals.SYSTEM);
     let io = Io::new(peripherals.GPIO, peripherals.IO_MUX);
 
-    let mut data_pin = AnyOutput::new(io.pins.gpio10, esp_hal::gpio::Level::Low);
-    let mut clk_pin = AnyOutput::new(io.pins.gpio21, esp_hal::gpio::Level::Low);
-    let mut latch_pin = AnyOutput::new(io.pins.gpio1, esp_hal::gpio::Level::Low);
+    let data_pin = AnyOutput::new(io.pins.gpio10, esp_hal::gpio::Level::Low);
+    let clk_pin = AnyOutput::new(io.pins.gpio21, esp_hal::gpio::Level::Low);
+    let latch_pin = AnyOutput::new(io.pins.gpio1, esp_hal::gpio::Level::Low);
+
+    let mut adv_shift_reg =
+        adv_shift_registers::AdvancedShiftRegister::<8, _>::new(data_pin, clk_pin, latch_pin, 0);
+    adv_shift_reg.update_shifters();
+
+    // backlight transistor
+    let mut bl_pin = adv_shift_reg.get_pin_mut(1, 0);
+    _ = bl_pin.set_high();
+
+    let reg_sel_pin = adv_shift_reg.get_pin_mut(1, 1);
+    let e_pin = adv_shift_reg.get_pin_mut(1, 2);
+    let d4_pin = adv_shift_reg.get_pin_mut(1, 7);
+    let d5_pin = adv_shift_reg.get_pin_mut(1, 6);
+    let d6_pin = adv_shift_reg.get_pin_mut(1, 5);
+    let d7_pin = adv_shift_reg.get_pin_mut(1, 4);
 
     let clocks = ClockControl::max(system.clock_control).freeze();
-    let delay = Delay::new(&clocks);
+    let mut delay = Delay::new(&clocks);
 
     esp_println::logger::init_logger_from_env();
 
-    shift_out(&mut clk_pin, &mut data_pin, 0);
-    shift_out(&mut clk_pin, &mut data_pin, 255);
-    latch_pin.set_high();
-    latch_pin.set_low();
+    let mut lcd = HD44780::new_4bit(
+        reg_sel_pin,
+        e_pin,
+        d4_pin,
+        d5_pin,
+        d6_pin,
+        d7_pin,
+        &mut delay,
+    )
+    .unwrap();
 
-    lcd_byte(0x33, false, &mut clk_pin, &mut data_pin, &mut latch_pin, &delay,);
-    lcd_byte(0x32, false, &mut clk_pin, &mut data_pin, &mut latch_pin, &delay,);
-    lcd_byte(0x28, false, &mut clk_pin, &mut data_pin, &mut latch_pin, &delay,);
-    lcd_byte(0x0C, false, &mut clk_pin, &mut data_pin, &mut latch_pin, &delay,);
-    lcd_byte(0x06, false, &mut clk_pin, &mut data_pin, &mut latch_pin, &delay,);
-    lcd_byte(0x01, false, &mut clk_pin, &mut data_pin, &mut latch_pin, &delay,);
-    delay.delay_millis(1000);
+    _ = lcd.reset(&mut delay);
+    _ = lcd.set_display_mode(
+        DisplayMode {
+            display: hd44780_driver::Display::On,
+            cursor_visibility: hd44780_driver::Cursor::Invisible,
+            cursor_blink: hd44780_driver::CursorBlink::Off,
+        },
+        &mut delay,
+    );
+    _ = lcd.set_display_size(DisplaySize::new(16, 2));
+    _ = lcd.clear(&mut delay);
 
-    lcd_byte(0x01, false, &mut clk_pin, &mut data_pin, &mut latch_pin, &delay,);
-    lcd_byte(0x80, false, &mut clk_pin, &mut data_pin, &mut latch_pin, &delay,);
+    _ = lcd.write_str("Lorem Ipsum", &mut delay);
 
-    let string = "Lorem Ipsum";
-    for c in string.bytes() {
-        lcd_byte(c, true, &mut clk_pin, &mut data_pin, &mut latch_pin, &delay);
-    }
-    /*
-    // MOVE CURSOR RIGHT
-    lcd_byte(0x14, false, &mut clk_pin, &mut data_pin, &mut latch_pin, &delay,);
-    */
+    _ = lcd.set_cursor_xy((13, 0), &mut delay);
+    _ = lcd.write_str("WOW", &mut delay);
 
-    // MOVE CURSOR TO (x, y)
-    let move_byte = (get_lcd_position((13, 0), (16, 2)) & 0b0111_1111) | 0b1000_0000;
-    log::info!("move_byte: 0x{move_byte:02X}");
-    lcd_byte(move_byte, false, &mut clk_pin, &mut data_pin, &mut latch_pin, &delay);
-
-    let string = "WOW";
-    for c in string.bytes() {
-        lcd_byte(c, true, &mut clk_pin, &mut data_pin, &mut latch_pin, &delay);
-    }
-
-    lcd_byte(0xC0, false, &mut clk_pin, &mut data_pin, &mut latch_pin, &delay);
-    let string = "Test 1234567890";
-    for c in string.bytes() {
-        lcd_byte(c, true, &mut clk_pin, &mut data_pin, &mut latch_pin, &delay);
-    }
+    _ = lcd.set_cursor_xy((0, 1), &mut delay);
+    _ = lcd.write_str("Test 1234567890", &mut delay);
 
     delay.delay_millis(5000);
-    // clear second line (to the end without first 5 chars)
-    let move_byte = (get_lcd_position((5, 1), (16, 2)) & 0b0111_1111) | 0b1000_0000;
-    lcd_byte(move_byte, false, &mut clk_pin, &mut data_pin, &mut latch_pin, &delay);
-
-    for _ in 0..11 {
-        lcd_byte(b' ', true, &mut clk_pin, &mut data_pin, &mut latch_pin, &delay);
-    }
+    _ = lcd.set_cursor_xy((5, 1), &mut delay);
+    _ = lcd.write_bytes(&[b' '; 11], &mut delay);
 
     let start = esp_hal::time::current_time().duration_since_epoch();
     loop {
         delay.delay(66.millis());
 
         let elapsed = esp_hal::time::current_time().duration_since_epoch() - start;
-        let move_byte = (get_lcd_position((5, 1), (16, 2)) & 0b0111_1111) | 0b1000_0000;
-        lcd_byte(move_byte, false, &mut clk_pin, &mut data_pin, &mut latch_pin, &delay);
+        _ = lcd.set_cursor_xy((5, 1), &mut delay);
 
         for digit in num_to_digits(elapsed.to_millis() as u128) {
             if digit == 0xFF {
                 break;
             }
 
-            lcd_byte(digit + 0x30, true, &mut clk_pin, &mut data_pin, &mut latch_pin, &delay);
+            _ = lcd.write_char((digit + 0x30) as char, &mut delay);
         }
     }
-}
-
-fn shift_out(clk_pin: &mut AnyOutput, data_pin: &mut AnyOutput, mut val: u8) {
-    for _ in 0..8 {
-        let level = esp_hal::gpio::Level::from(val & 1 > 0);
-        data_pin.set_level(level);
-        val >>= 1;
-
-        clk_pin.set_high();
-        clk_pin.set_low();
-    }
-}
-
-const E_PULSE: u32 = 500; // microseconds
-const E_DELAY: u32 = 500; // microseconds
-
-/// `byte`: byte to be sent to LCD
-/// `mode`: true for char, false for cmd
-fn lcd_byte(
-    byte: u8,
-    mode: bool,
-    clk_pin: &mut AnyOutput,
-    data_pin: &mut AnyOutput,
-    latch_pin: &mut AnyOutput,
-    delay: &Delay,
-) {
-    // high nibble
-    let mut tmp = match mode {
-        true => RS_SHIFT | ((byte >> 4) & 0b00001111),
-        false => (byte >> 4) & 0b00001111,
-    };
-
-    tmp |= E_SHIFT;
-    tmp |= BACKLIGHT_SHIFT;
-
-    delay.delay_micros(E_DELAY);
-    shift_out(clk_pin, data_pin, tmp);
-    shift_out(clk_pin, data_pin, 255); // FIRST SHIFTER (FOR BUTTONS)
-    latch_pin.set_high();
-    latch_pin.set_low();
-    delay.delay_micros(E_PULSE);
-    shift_out(clk_pin, data_pin, BACKLIGHT_SHIFT);
-    shift_out(clk_pin, data_pin, 255); // FIRST SHIFTER (FOR BUTTONS)
-    latch_pin.set_high();
-    latch_pin.set_low();
-    delay.delay_micros(E_DELAY);
-
-    // low nibble
-    let mut tmp = match mode {
-        true => RS_SHIFT | (byte & 0b00001111),
-        false => byte & 0b00001111,
-    };
-
-    tmp |= E_SHIFT;
-    tmp |= BACKLIGHT_SHIFT;
-
-    delay.delay_micros(E_DELAY);
-    shift_out(clk_pin, data_pin, tmp);
-    shift_out(clk_pin, data_pin, 255); // FIRST SHIFTER (FOR BUTTONS)
-    latch_pin.set_high();
-    latch_pin.set_low();
-    delay.delay_micros(E_PULSE);
-    shift_out(clk_pin, data_pin, BACKLIGHT_SHIFT);
-    shift_out(clk_pin, data_pin, 255); // FIRST SHIFTER (FOR BUTTONS)
-    latch_pin.set_high();
-    latch_pin.set_low();
-    delay.delay_micros(E_DELAY);
-}
-
-// https://github.com/JohnDoneth/hd44780-driver/blob/3381df150b3eb7d65c81195c4730e3a007af2e2a/src/lib.rs#L114C1-L130C2
-pub fn get_lcd_position(position: (u8, u8), size: (u8, u8)) -> u8 {
-    if (position.0 >= size.0) || (position.1 >= size.1) {
-        panic!(
-            "Coordinates out of bounds: ({};{}) not fitting in a {}x{} display",
-            position.0, position.1, size.0, size.1
-        );
-    }
-
-    let mut addr = position.0 & 0x3f;
-    if (position.1 & 1) == 1 {
-        addr += 0x40;
-    }
-    if (position.1 & 2) == 2 {
-        addr += size.0;
-    }
-
-    addr
 }
 
 fn num_to_digits(mut num: u128) -> [u8; 40] {
