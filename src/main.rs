@@ -15,9 +15,14 @@ use hd44780_driver::{display_size::DisplaySize, DisplayMode, HD44780};
 
 #[entry]
 fn main() -> ! {
+    esp_println::logger::init_logger_from_env();
+
     let peripherals = Peripherals::take();
     let system = SystemControl::new(peripherals.SYSTEM);
     let io = Io::new(peripherals.GPIO, peripherals.IO_MUX);
+
+    let clocks = ClockControl::max(system.clock_control).freeze();
+    let mut delay = Delay::new(&clocks);
 
     let data_pin = AnyOutput::new(io.pins.gpio10, esp_hal::gpio::Level::Low);
     let clk_pin = AnyOutput::new(io.pins.gpio21, esp_hal::gpio::Level::Low);
@@ -26,22 +31,17 @@ fn main() -> ! {
     let mut adv_shift_reg =
         adv_shift_registers::AdvancedShiftRegister::<8, _>::new(data_pin, clk_pin, latch_pin, 0);
     adv_shift_reg.update_shifters();
+    let digits_shifters = adv_shift_reg.get_shifter_range_mut(2..8);
+    digits_shifters.set_data(&[255; 6]);
 
     // backlight transistor
-    let mut bl_pin = adv_shift_reg.get_pin_mut(1, 0);
-    _ = bl_pin.set_high();
-
-    let reg_sel_pin = adv_shift_reg.get_pin_mut(1, 1);
-    let e_pin = adv_shift_reg.get_pin_mut(1, 2);
-    let d4_pin = adv_shift_reg.get_pin_mut(1, 7);
-    let d5_pin = adv_shift_reg.get_pin_mut(1, 6);
-    let d6_pin = adv_shift_reg.get_pin_mut(1, 5);
-    let d7_pin = adv_shift_reg.get_pin_mut(1, 4);
-
-    let clocks = ClockControl::max(system.clock_control).freeze();
-    let mut delay = Delay::new(&clocks);
-
-    esp_println::logger::init_logger_from_env();
+    let mut bl_pin = adv_shift_reg.get_pin_mut(1, 1, true);
+    let reg_sel_pin = adv_shift_reg.get_pin_mut(1, 2, true);
+    let e_pin = adv_shift_reg.get_pin_mut(1, 3, true);
+    let d4_pin = adv_shift_reg.get_pin_mut(1, 7, false);
+    let d5_pin = adv_shift_reg.get_pin_mut(1, 6, false);
+    let d6_pin = adv_shift_reg.get_pin_mut(1, 5, false);
+    let d7_pin = adv_shift_reg.get_pin_mut(1, 4, false);
 
     let mut lcd = HD44780::new_4bit(
         reg_sel_pin,
@@ -53,6 +53,7 @@ fn main() -> ! {
         &mut delay,
     )
     .unwrap();
+    _ = bl_pin.set_high();
 
     _ = lcd.reset(&mut delay);
     _ = lcd.set_display_mode(
@@ -85,8 +86,9 @@ fn main() -> ! {
         let elapsed = esp_hal::time::current_time().duration_since_epoch() - start;
         _ = lcd.set_cursor_xy((5, 1), &mut delay);
 
-        for digit in num_to_digits(elapsed.to_millis() as u128) {
-            if digit == 0xFF {
+        let (digits, n) = num_to_digits(elapsed.to_millis() as u128);
+        for digit in &digits[..n] {
+            if *digit == 0xFF {
                 break;
             }
 
@@ -95,7 +97,7 @@ fn main() -> ! {
     }
 }
 
-fn num_to_digits(mut num: u128) -> [u8; 40] {
+fn num_to_digits(mut num: u128) -> ([u8; 40], usize) {
     let mut tmp = [0xFF; 40];
     let mut pos = 0;
     while num > 0 {
@@ -112,5 +114,5 @@ fn num_to_digits(mut num: u128) -> [u8; 40] {
         tmp.swap(i, end_i);
     }
 
-    tmp
+    (tmp, pos)
 }

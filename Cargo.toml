@@ -6,7 +6,6 @@ edition = "2021"
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-adv-shift-registers = "0.2.0"
 embedded-hal = "1.0.0"
 esp-backtrace = { version = "0.14.1", features = [
     "esp32c3",
@@ -17,6 +16,8 @@ esp-backtrace = { version = "0.14.1", features = [
 esp-hal = { version = "0.20.1", features = [ "esp32c3", "embedded-hal-02", "embedded-hal" ] }
 esp-println = { version = "0.11.0", features = ["esp32c3", "log"] }
 hd44780-driver = { git = "https://github.com/JohnDoneth/hd44780-driver.git" }
+adv-shift-registers = "0.2.1"
+#adv-shift-registers = { path = "../adv-shift-registers" }
 log = { version = "0.4.22" }
 [profile.dev]
 # Rust debug is too slow.
