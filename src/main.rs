@@ -4,12 +4,9 @@
 use embedded_hal::digital::OutputPin;
 use esp_backtrace as _;
 use esp_hal::{
-    clock::ClockControl,
     delay::Delay,
-    gpio::{AnyOutput, Io},
-    peripherals::Peripherals,
+    gpio::{Output, Io},
     prelude::*,
-    system::SystemControl,
 };
 use hd44780_driver::{display_size::DisplaySize, DisplayMode, HD44780};
 
@@ -17,16 +14,14 @@ use hd44780_driver::{display_size::DisplaySize, DisplayMode, HD44780};
 fn main() -> ! {
     esp_println::logger::init_logger_from_env();
 
-    let peripherals = Peripherals::take();
-    let system = SystemControl::new(peripherals.SYSTEM);
+    let peripherals = esp_hal::init(esp_hal::Config::default());
     let io = Io::new(peripherals.GPIO, peripherals.IO_MUX);
 
-    let clocks = ClockControl::max(system.clock_control).freeze();
-    let mut delay = Delay::new(&clocks);
+    let mut delay = Delay::new();
 
-    let data_pin = AnyOutput::new(io.pins.gpio10, esp_hal::gpio::Level::Low);
-    let clk_pin = AnyOutput::new(io.pins.gpio21, esp_hal::gpio::Level::Low);
-    let latch_pin = AnyOutput::new(io.pins.gpio1, esp_hal::gpio::Level::Low);
+    let data_pin = Output::new(io.pins.gpio10, esp_hal::gpio::Level::Low);
+    let clk_pin = Output::new(io.pins.gpio21, esp_hal::gpio::Level::Low);
+    let latch_pin = Output::new(io.pins.gpio1, esp_hal::gpio::Level::Low);
 
     let mut adv_shift_reg =
         adv_shift_registers::AdvancedShiftRegister::<8, _>::new(data_pin, clk_pin, latch_pin, 0);
@@ -79,11 +74,11 @@ fn main() -> ! {
     _ = lcd.set_cursor_xy((5, 1), &mut delay);
     _ = lcd.write_bytes(&[b' '; 11], &mut delay);
 
-    let start = esp_hal::time::current_time().duration_since_epoch();
+    let start = esp_hal::time::now().duration_since_epoch();
     loop {
         delay.delay(66.millis());
 
-        let elapsed = esp_hal::time::current_time().duration_since_epoch() - start;
+        let elapsed = esp_hal::time::now().duration_since_epoch() - start;
         _ = lcd.set_cursor_xy((5, 1), &mut delay);
 
         let (digits, n) = num_to_digits(elapsed.to_millis() as u128);
